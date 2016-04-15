@@ -1,0 +1,20 @@
+{
+    "collab_server" : "",
+    "contents" : "# install all required packages\n\n# clear workspace\nrm(list = ls())\n\n# load misc functions\nsource('code/functions.R')\n\nmessage('Installing required R packages')\n\n# ~~~~~~~~~~~~~~\n# list required platform, version etc.\n\n# platform info\nplatform_os <- 'linux-gnu'\nplatform_arch <- 'x86_64'\n\n# R version\nR_version <- c('3.2.2', '3.2.1', '3.1.2', '3.1.3')\n\n# CRAN packages\nCRAN <- c(rgdal = '1.0-7',\n          rgeos = '0.3-13',\n          raster = '2.4-20',\n          foreach = '1.4.2',\n          doParallel = '1.0.8',\n          snowfall = '1.84-6',\n          RColorBrewer = '1.1-2',\n          viridis = '0.3.1',\n          scales = '0.3.0',\n          reldist = '1.6-4',\n          mgcv = '1.8-9',\n          plotrix = '3.6',\n          SDMTools = '1.1-221')\n\n# github packages\ngithub <- c(`SEEG-Oxford/seegSDM` = '0.1-7',\n           # `SEEG-Oxford/seegMBG` = 'master',\n            `royburst/seegMBG` = 'master') \n\n# inla version\ninla_version <- '0.0-1440400394'\n\n# ~~~~~~~~~~~~~~~\n# check and install\n\n# check R version\ncurrent_version <- paste(version$major, version$minor, sep = '.')\nif (!(current_version %in% R_version)) {\n  stop(sprintf('This code expects to be run using R version %s',\n               paste(R_version, collapse = ' or ')))\n}\n\n# check platform\nif (version$os != platform_os &&\n    version$arch != platform_arch) {\n  stop(sprintf('This code expects to be run under %s with %s architecture',\n               platform_os,\n               platform_arch))\n}\n\n# check & get R packages\ntidyInstall(packages = names(CRAN),\n            versions = CRAN)\n\n# get specific INLA version from non-CRAN repo\nif (!('INLA' %in% installed.packages() &&\n      versions::installed.versions('INLA') == inla_version)) {\n  install.packages(sprintf('http://www.math.ntnu.no/inla/R/stable/src/contrib/INLA_%s.tar.gz', inla_version),\n                   type = 'source',\n                   repos = NULL)\n}\n\n# get specific versions of seegSDM and seegMBG from GitHub\nfor (i in 1:length(github)) {\n  devtools::install_github(names(github)[i], ref = github[i])\n}\n\nmessage('\\nPackage installation done')\nreportTime()\nmessage('\\n\\n')\n",
+    "created" : 1460667105454.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "512423010",
+    "id" : "4799EAD4",
+    "lastKnownWriteTime" : 1460667128,
+    "last_content_update" : 1460667128991,
+    "path" : "J:/temp/geospatial/U5M_africa/code/install_packages.R",
+    "project_path" : null,
+    "properties" : {
+    },
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

@@ -143,14 +143,37 @@ gamTrans <- function(coords,
                      s_args = list(),
                      predict = TRUE,
                      ...) {
-
+  
+  # test to see if covs are passed as a rasterbrick or a list
+    # an RBrick indicates there are no temporal covariates
+    # a list indicates either a mix, or only temporal
+    # within the list RLayers are non-temporal, RBricks are temporally varying
+  if(inherits(covs,'list')) {
+    temporal = TRUE
+  } else {
+    temporal = FALSE
+  } 
+  
+  # run a test to see that we have years in the extra_data if we have temporal covs
+  if(temporal & is.null(extra_data))
+    stop('You have temporally-varying covariates, but not temporally varying data. Please include in extra data argument.')
+  
+  # test we have the same number of periods in data as in all temporal covs
+  if(temporal & !is.null(extra_data)){
+    for(rb in covs) {
+      if(class(rb)=="RasterBrick"&dim(rb)[3]!=length(unique(extra_data$year)))
+        stop('One of your temporally-varying bricks does not have the correct number of layers. Assumes year is the temporal variable in your extra_data.')
+    }
+  }
+  
+  
   # whether there's a conditional bit
   cond <- !is.null(condition)
 
   stopifnot(inherits(extra_terms, 'formula'))
 
   # check inputs
-  stopifnot(inherits(covs, 'Raster'))
+  stopifnot(inherits(covs, 'Raster')|inherits(covs, 'list'))
   if (cond)
     stopifnot(inherits(condition_covs, 'Raster'))
 
@@ -204,9 +227,68 @@ gamTrans <- function(coords,
   # ~~~~~~~~~~~~~
   # get training data
 
-  # extract covariates
-  data <- data.frame(extract(covs, coords))
+  # extraction for temporally varying and non-temporally varing covariates is slightly different
+  if(temporal){
+    # split apart temporally varying and non temporally varying covariates
+    nT_covs=T_covs=list()
+    for(c in names(covs)){
+      if(class(covs[[c]])=="RasterLayer")
+        nT_covs[[c]]=covs[[c]]
+      if(class(covs[[c]])=="RasterBrick")
+        T_covs[[c]]=covs[[c]]
+    }
+    
+    # initiate 
+    if (!is.null(extra_data)){
+      data <- extra_data
+    } else {
+      stop('you have temporal covariates with no year extra data terms.')
+    }
+    
+    
+    # begin data with nontemporally varying because that is easy
+    if(length(nT_covs)>0){
+      nT_covs=brick(nT_covs)
+      crs(nT_covs)="+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
+      data <- data.frame(cbind(data,extract(nT_covs, coords)))
+    }
+    
+    
+    # Note, we expect rasterbricks to go from earliest to latest period order, it will match with watch we get in extra_data to do this
+    periods=sort(unique(data$year))
+    tnames=c()
+    for(n in names(T_covs)){
+      names(T_covs[[n]])=paste0(n,periods)
+      tnames=c(tnames,names(T_covs[[n]]))
+      data <- data.frame(cbind(data,extract(T_covs[[n]], coords)))
+    }
+    
+    # match years of time varying covariates and data points, then clean up the data frame
+    # assumes a 4 year time period (years, in most cases 2000,2005,2010,2015)
+    for(n in tnames)
+      data[,n][data$year!= as.numeric(substr(n,nchar(n)-3,nchar(n)))]=NA
+    for(n in names(T_covs))
+      data[,n]=rowSums(data[,paste0(n,periods)],na.rm=T)
+    
+    data=data[,!names(data) %in% tnames]
+    
+    # save all covs in a brick, will need them later
+    covs<-brick(covs)
+  }
+  
+  
+  
+  # extract covariates if have no temporally varying
+  if(!temporal) {
+    
+    data <- data.frame(extract(covs, coords))
 
+    if (!is.null(extra_data)){
+      data <- extra_data
+    } 
+  } 
+    
+  
   # optionally combine this with the conditional and extra data
   if (cond)
     data <- cbind(data,
@@ -214,13 +296,12 @@ gamTrans <- function(coords,
                                      coords)),
                   condition_intercept = condition,
                   condition)
-  if (!is.null(extra_data))
-    data <- cbind(data,
-                  extra_data)
 
+
+  
+  
   # find any missing values and remove corresponding rows
   rem_idx <- badRows(data)
-
   data <- data[!rem_idx, ]
 
   if (is.vector(response)) {
@@ -229,6 +310,9 @@ gamTrans <- function(coords,
     response <- response[!rem_idx, ]
   }
 
+  
+  
+  
   # fit the model
   if (bam) {
     m <- mgcv::bam(f, data = data, family = family, ...)
@@ -236,6 +320,8 @@ gamTrans <- function(coords,
     m <- mgcv::gam(f, data = data, family = family, ...)
   }
 
+  
+  
   # ~~~~~~~~~~
   # optionally apply transformations
 
@@ -243,12 +329,17 @@ gamTrans <- function(coords,
 
     # find index for non-missing cells
     cell_idx <- cellIdx(covs)
-
+      
+      
+      
     # transform the main covariates
 
     # extract covariate values
     vals <- raster::extract(covs, cell_idx)
 
+    
+    ### !!!! STOPPING POINT!
+    
     # convert to a data.frame
     vals <- data.frame(vals)
 
@@ -286,9 +377,11 @@ gamTrans <- function(coords,
     colnames(vals_trans) <- gsub('^s\\(', '', colnames(vals_trans))
 
     # keep only the names that are in the raster
+      # gets rid of year and age bin
     vals_trans <- vals_trans[, colnames(vals_trans) %in% cov_names]
 
     # set new raster values
+        # !! THIS will need editing for temporals to run.
     trans_ras <- insertRaster(raster = covs,
                               new_vals = vals_trans,
                               idx = cell_idx)
