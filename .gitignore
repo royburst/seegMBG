@@ -1,0 +1,19 @@
+# things for git to ignore
+
+# any compiled things
+*.pdf
+*.png
+
+# RStudio things
+*.Rdata
+*.RData
+*.RHistory
+*.Rhistory
+*.Rproj.user
+*.Rproj
+*.RDataTmp
+.Rproj*/
+
+# todo file
+todo.md
+
